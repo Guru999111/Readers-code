@@ -1,0 +1,102 @@
+#include <stdio.h>
+#include <pthread.h>
+#include <unistd.h>
+
+#define N 5
+
+pthread_mutex_t mutex;
+pthread_cond_t cond[N];
+
+int state[N];
+
+#define THINKING 0
+#define HUNGRY 1
+#define EATING 2
+
+int left(int i)
+{
+    return (i + N - 1) % N;
+}
+
+int right(int i)
+{
+    return (i + 1) % N;
+}
+
+void test(int i)
+{
+    if(state[i] == HUNGRY &&
+       state[left(i)] != EATING &&
+       state[right(i)] != EATING)
+    {
+        state[i] = EATING;
+        pthread_cond_signal(&cond[i]);
+    }
+}
+
+void take_fork(int i)
+{
+    pthread_mutex_lock(&mutex);
+
+    state[i] = HUNGRY;
+    printf("Philosopher %d is hungry\n", i + 1);
+
+    test(i);
+
+    while(state[i] != EATING)
+        pthread_cond_wait(&cond[i], &mutex);
+
+    pthread_mutex_unlock(&mutex);
+}
+
+void put_fork(int i)
+{
+    pthread_mutex_lock(&mutex);
+
+    state[i] = THINKING;
+    printf("Philosopher %d finished eating\n", i + 1);
+
+    test(left(i));
+    test(right(i));
+
+    pthread_mutex_unlock(&mutex);
+}
+
+void* philosopher(void* num)
+{
+    int i = *(int*)num;
+
+    printf("Philosopher %d is thinking\n", i + 1);
+    sleep(1);
+
+    take_fork(i);
+
+    printf("Philosopher %d is eating\n", i + 1);
+    sleep(2);
+
+    put_fork(i);
+
+    return NULL;
+}
+
+int main()
+{
+    pthread_t thread[N];
+    int id[N];
+
+    pthread_mutex_init(&mutex, NULL);
+
+    for(int i = 0; i < N; i++)
+        pthread_cond_init(&cond[i], NULL);
+
+    for(int i = 0; i < N; i++)
+    {
+        id[i] = i;
+        pthread_create(&thread[i], NULL, philosopher, &id[i]);
+    }
+
+    for(int i = 0; i < N; i++)
+        pthread_join(thread[i], NULL);
+
+    return 0;
+}
